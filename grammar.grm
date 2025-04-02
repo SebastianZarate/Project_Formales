@@ -1,0 +1,4 @@
+type: 3
+start: q0
+q0 -> a q1 | b
+q1 -> a q1 | b
