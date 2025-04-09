@@ -12,7 +12,7 @@ Este proyecto consiste en un módulo capaz de leer gramáticas de Tipo 2 y Tipo 
 
 ## Requisitos
 - Lenguaje de programación: Python (3.x)
-- Librerías necesarias: tkinter, ttk
+- Librerías necesarias: tkinter, grammar, graphviz, tempfile, os, pillow.
 
 ## Instalación
 1. Clonar el repositorio:
