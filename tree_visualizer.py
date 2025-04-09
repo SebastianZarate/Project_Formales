@@ -1,24 +1,59 @@
 import graphviz
 import tempfile
 import os
-from tkinter import messagebox
+from tkinter import messagebox, Scrollbar, Canvas, Frame
 from PIL import Image, ImageTk
 
 class TreeVisualizer:
     """
     Clase para visualizar árboles de derivación usando Graphviz.
     """
-    def __init__(self, canvas):
+    def __init__(self, canvas_frame):
         """
-        Inicializa el visualizador con el canvas donde se mostrará el árbol.
+        Inicializa el visualizador con el frame donde se mostrará el árbol con barras de desplazamiento.
         
-        :param canvas: Canvas de Tkinter donde se mostrará el árbol.
+        :param canvas_frame: Frame de Tkinter donde se colocará el canvas con barras de desplazamiento.
         """
-        self.canvas = canvas
+        self.canvas_frame = canvas_frame
+        
+        # Crear canvas y barras de desplazamiento
+        self.canvas = Canvas(canvas_frame, bg='white')
+        self.h_scrollbar = Scrollbar(canvas_frame, orient='horizontal', command=self.canvas.xview)
+        self.v_scrollbar = Scrollbar(canvas_frame, orient='vertical', command=self.canvas.yview)
+        
+        # Configurar el canvas para usar las barras de desplazamiento
+        self.canvas.config(xscrollcommand=self.h_scrollbar.set, yscrollcommand=self.v_scrollbar.set)
+        
+        # Colocar los elementos en el frame usando grid para un mejor control del layout
+        self.canvas.grid(row=0, column=0, sticky='nsew')
+        self.h_scrollbar.grid(row=1, column=0, sticky='ew')
+        self.v_scrollbar.grid(row=0, column=1, sticky='ns')
+        
+        # Configurar el frame para que se expanda con la ventana
+        canvas_frame.grid_rowconfigure(0, weight=1)
+        canvas_frame.grid_columnconfigure(0, weight=1)
+        
+        # Variables para almacenar referencias a objetos
         self.graph = None
         self.image = None
         self.image_tk = None
         self.temp_files = []
+        
+        # Configurar eventos para zoom con rueda del ratón
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel)  # Windows
+        self.canvas.bind("<Button-4>", self._on_mousewheel)    # Linux scroll up
+        self.canvas.bind("<Button-5>", self._on_mousewheel)    # Linux scroll down
+    
+    def _on_mousewheel(self, event):
+        """
+        Maneja el evento de la rueda del ratón para hacer scroll vertical.
+        """
+        if event.num == 4 or event.delta > 0:
+            # Scroll hacia arriba
+            self.canvas.yview_scroll(-1, "units")
+        elif event.num == 5 or event.delta < 0:
+            # Scroll hacia abajo
+            self.canvas.yview_scroll(1, "units")
     
     def create_tree(self, tree_data, grammar):
         """
@@ -106,7 +141,8 @@ class TreeVisualizer:
     
     def display_image(self, img_path):
         """
-        Muestra la imagen del árbol en el canvas.
+        Muestra la imagen del árbol en el canvas con un tamaño 3 veces mayor
+        y configurado para permitir scroll.
         
         :param img_path: Ruta al archivo de imagen.
         """
@@ -116,34 +152,24 @@ class TreeVisualizer:
         # Cargar la imagen
         pil_image = Image.open(img_path)
         
-        # Obtener dimensiones del canvas
-        self.canvas.update_idletasks()  # Forzar actualización de geometría
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
+        # Calcular dimensiones 3 veces más grandes que las originales
+        new_width = pil_image.width * 1
+        new_height = pil_image.height * 1
         
-        # Si el canvas aún no tiene dimensiones, usar un tamaño predeterminado
-        if canvas_width <= 1 or canvas_height <= 1:
-            canvas_width = 400  # Valor predeterminado
-            canvas_height = 300  # Valor predeterminado
-        
-        # Redimensionar la imagen si es necesario
-        if pil_image.width > canvas_width or pil_image.height > canvas_height:
-            ratio = min(canvas_width / pil_image.width, canvas_height / pil_image.height)
-            new_width = int(pil_image.width * ratio * 0.9)  # 90% del tamaño disponible
-            new_height = int(pil_image.height * ratio * 0.9)
-            pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
+        # Redimensionar la imagen al tamaño aumentado
+        pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
         
         # Convertir a formato compatible con Tkinter
         self.image_tk = ImageTk.PhotoImage(pil_image)
         
-        # Mostrar la imagen en el canvas
-        img_item = self.canvas.create_image(
-            canvas_width // 2, canvas_height // 2,
-            image=self.image_tk, anchor='center'
-        )
+        # Configurar el área de desplazamiento para acomodar toda la imagen
+        self.canvas.config(scrollregion=(0, 0, new_width, new_height))
         
-        # Configurar el área de desplazamiento
-        self.canvas.config(scrollregion=self.canvas.bbox("all"))
+        # Mostrar la imagen en el canvas desde la esquina superior izquierda
+        img_item = self.canvas.create_image(
+            0, 0,
+            image=self.image_tk, anchor='nw'
+        )
     
     def cleanup(self):
         """
