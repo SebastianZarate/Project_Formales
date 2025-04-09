@@ -34,7 +34,7 @@ class TreeVisualizer:
         
             # Crear un nuevo grafo dirigido
             self.graph = graphviz.Digraph(format='png', engine='dot')
-            self.graph.attr(rankdir='TB', splines='ortho', nodesep='0.5', 
+            self.graph.attr(rankdir='LR', splines='ortho', nodesep='0.3', 
                         ranksep='0.5', fontname='Arial')
             
             # Generar el árbol recursivamente

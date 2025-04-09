@@ -7,6 +7,8 @@ class GrammarGenerator:
         Recibe una instancia de Grammar.
         """
         self.grammar = grammar
+        self.rng = random.Random()  # Generador de números aleatorios independiente
+        self.rng.seed()  # Semilla basada en tiempo del sistema
 
     def generate_string(self, length):
         """
@@ -29,7 +31,7 @@ class GrammarGenerator:
                 productions = self.grammar.productions.get(current, [])
                 if not productions:
                     break
-                production = random.choice(productions)
+                production = self.rng.choice(productions)
                 if production == []:
                     break
                 generated += production[0]
@@ -43,17 +45,17 @@ class GrammarGenerator:
         return None
 
     def _generate_cfg(self, length):
-        max_attempts = 1000
+        max_attempts = 5000  # Aumentar intentos
         for _ in range(max_attempts):
             candidate = self._random_expand(self.grammar.start)
             if candidate is not None and len(candidate) == length:
-                return candidate
+                return candidate.replace(" ", "")  # Eliminar espacios si existen
         return None
 
     def _random_expand(self, symbol):
         if symbol in self.grammar.productions:
             productions = self.grammar.productions[symbol]
-            production = random.choice(productions)
+            production = self.rng.choice(productions)
             result = ""
             for sym in production:
                 result += self._random_expand(sym)

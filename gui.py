@@ -17,6 +17,7 @@ class ModernGrammarGUI:
         self.tree_visualizer = None  # Se inicializará después
         
         master.title("Procesador de Gramáticas")
+        master.state('zoomed')
         master.geometry("800x700")  # Aumentamos un poco el tamaño
         master.minsize(800, 700)
         self.configure_styles()
@@ -94,7 +95,7 @@ class ModernGrammarGUI:
         
     def create_editor_tab(self, parent):
         # El código existente para la pestaña del editor permanece igual
-        padding_frame = ttk.Frame(parent, padding=20)
+        padding_frame = ttk.Frame(parent)
         padding_frame.pack(fill=tk.BOTH, expand=True)
         ttk.Label(padding_frame, text="Editor de Gramática", style='Subtitle.TLabel').pack(anchor=tk.W, pady=(0, 10))
         
@@ -207,6 +208,37 @@ class ModernGrammarGUI:
         derivation_notebook.add(tree_tab, text="Árbol de Derivación")
         derivation_notebook.pack(fill=tk.BOTH, expand=True, pady=10)
         
+    # En gui.py, agregar este método
+    def show_generated_strings(self):
+        if not hasattr(self.grammar, 'productions') or self.generator is None:
+            messagebox.showwarning("Error", "Cargue una gramática primero")
+            return
+        
+        try:
+            length = int(self.spn_length.get())
+            if length <= 0:
+                messagebox.showwarning("Error", "Longitud inválida")
+                return
+            
+            results = []
+            for _ in range(5):
+                self.generator.rng.seed()
+                generated = self.generator.generate_string(length)
+                if generated:
+                    results.append(generated)
+                else:
+                    break
+            
+            if not results:
+                messagebox.showinfo("Resultado", "No se generaron cadenas válidas")
+                return
+            
+            result_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(results)])
+            messagebox.showinfo(f"Primeras {len(results)} cadenas (long={length})", result_text)
+            
+        except ValueError:
+            messagebox.showerror("Error", "Longitud debe ser un número")
+        
     def create_generate_tab(self, parent):
         # El código existente para la pestaña de generación permanece igual
         padding_frame = ttk.Frame(parent, padding=20)
@@ -221,6 +253,8 @@ class ModernGrammarGUI:
         self.btn_generate = ttk.Button(padding_frame, text="Generar Cadena", style='Primary.TButton',
                                        command=self.generate_string)
         self.btn_generate.pack(pady=10)
+        ttk.Button(padding_frame, text="Mostrar Cadenas Generadas", style='Primary.TButton',
+             command=self.show_generated_strings).pack(pady=10)
         result_frame = ttk.Frame(padding_frame)
         result_frame.pack(fill=tk.X, pady=10)
         ttk.Label(result_frame, text="Cadena generada:").pack(anchor=tk.W)
@@ -324,6 +358,9 @@ class ModernGrammarGUI:
         """
         Valida una cadena usando el validador de gramática y muestra los resultados.
         """
+        self.derivation_canvas.delete("all")
+        self.lbl_result.config(text="")
+        
         if not hasattr(self.grammar, 'productions') or not self.grammar.productions or self.validator is None:
             messagebox.showwarning("Advertencia", "Primero cargue una gramática")
             return
