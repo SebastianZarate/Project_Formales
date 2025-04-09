@@ -1,8 +1,10 @@
 from tkinter import messagebox
 
+# Clase que valida si una cadena pertenece a un lenguaje definido por una gramática
 class GrammarValidator:
     def __init__(self, grammar):
         """
+        Constructor de la clase GrammarValidator.
         Recibe una instancia de Grammar.
         """
         self.grammar = grammar
@@ -10,17 +12,21 @@ class GrammarValidator:
     def validate_string(self, string):
         """
         Valida la cadena según el tipo de gramática:
-         - Tipo 3: se asume gramática regular y se simula un autómata.
-         - Tipo 2: se realiza un análisis recursivo (backtracking) para gramáticas CFG.
-        Retorna (True, derivation, tree) si es válida o (False, derivation, tree) en caso contrario.
+         - Tipo 3: gramática regular, se simula como si fuera un autómata finito.
+         - Tipo 2: gramática libre de contexto, se realiza backtracking recursivo.
+        
+        Retorna una tupla:
+         - (True, derivation, tree) si la cadena es válida.
+         - (False, derivation, tree) si la cadena no es válida.
         """
         if self.grammar.type == 3:
             is_valid, derivation = self._validate_regular(string)
-            # Para gramáticas tipo 3, usaremos una estructura simple de árbol
+            # Crea un árbol simple solo si la cadena es válida
             tree = self._create_regular_tree(derivation, string) if is_valid else None
             return is_valid, derivation, tree
         elif self.grammar.type == 2:
             derivation = []
+            # Árbol inicial con el símbolo de arranque
             tree = {"symbol": self.grammar.start, "children": []}
             result = self._parse_cfg(self.grammar.start, string, derivation, tree)
             if result is not None and result == "":
@@ -32,28 +38,32 @@ class GrammarValidator:
             return False, [], None
 
     def _validate_regular(self, string):
-        current = self.grammar.start
-        path = [current]
-        remaining = string
+        """
+        Valida una cadena utilizando una gramática regular simulando un autómata.
+        Recorre la cadena símbolo por símbolo guiándose por las producciones.
+        """
+        current = self.grammar.start  # Estado inicial
+        path = [current]  # Trazado de derivación
+        remaining = string  # Parte de la cadena aún no procesada
 
         while remaining:
-            char = remaining[0]
-            found = False
+            char = remaining[0]  # Primer carácter a procesar
+            found = False  # Bandera para saber si se encontró una producción válida
             for production in self.grammar.productions.get(current, []):
                 if len(production) >= 1 and production[0] == char:
                     next_state = production[1] if len(production) > 1 else None
                     found = True
                     path.append(f"{char} -> {next_state if next_state else 'FINAL'}")
                     current = next_state
-                    remaining = remaining[1:]
+                    remaining = remaining[1:]  # Avanza un carácter
                     break
             if not found:
-                return False, path
+                return False, path  # No hay transición válida
 
         if current is None:
-            return True, path
+            return True, path  # Llegó al final de manera válida
         else:
-            # Se permite producción epsilon en el estado final
+            # Si quedan transiciones ε permitidas desde el estado final
             for prod in self.grammar.productions.get(current, []):
                 if prod == []:
                     path.append("ε")
@@ -62,19 +72,20 @@ class GrammarValidator:
 
     def _create_regular_tree(self, derivation, string):
         """
-        Crea una estructura de árbol simple para gramáticas regulares.
+        Crea una representación de árbol de derivación para una gramática regular.
         """
         tree = {"symbol": self.grammar.start, "children": []}
         current_node = tree
         
-        for i, step in enumerate(derivation[1:]):  # Skip the first state
+        for i, step in enumerate(derivation[1:]):  # Se omite el primer estado inicial
             if "ε" in step:
+                # Agrega un nodo para ε si es una derivación vacía
                 current_node["children"].append({"symbol": "ε", "children": []})
                 continue
                 
             parts = step.split(" -> ")
             if len(parts) >= 1:
-                symbol = parts[0]
+                symbol = parts[0]  # Símbolo terminal consumido
                 next_state = parts[1] if len(parts) > 1 else "FINAL"
                 
                 child = {"symbol": symbol, "children": []}
@@ -83,23 +94,27 @@ class GrammarValidator:
                 if next_state != "FINAL":
                     next_node = {"symbol": next_state, "children": []}
                     child["children"].append(next_node)
-                    current_node = next_node
-        
+                    current_node = next_node  # Se mueve al siguiente nodo
+
         return tree
 
     def _parse_cfg(self, symbol, s, derivation, tree_node):
+        """
+        Función recursiva que intenta derivar la cadena `s` a partir del símbolo dado.
+        Usa backtracking para probar todas las producciones posibles de una CFG.
+        """
         if symbol in self.grammar.productions:
             for production in self.grammar.productions[symbol]:
                 step = f"{symbol} -> {' '.join(production) if production else 'ε'}"
                 derivation_copy = derivation.copy()
                 derivation_copy.append(step)
                 
-                # Create tree node for this production
+                # Crea nodos hijos para los símbolos de la producción
                 prod_children = []
                 for prod_sym in production:
                     prod_children.append({"symbol": prod_sym, "children": []})
                 
-                # Save the original tree structure
+                # Guarda el estado original del árbol
                 original_children = tree_node["children"].copy()
                 tree_node["children"] = prod_children
                 
@@ -107,28 +122,30 @@ class GrammarValidator:
                 success = True
                 
                 for i, prod_sym in enumerate(production):
+                    # Llama recursivamente a cada símbolo de la producción
                     result = self._parse_cfg(prod_sym, remainder, derivation_copy, prod_children[i])
                     if result is None:
                         success = False
                         break
                     else:
-                        remainder = result
+                        remainder = result  # Avanza en la cadena si tuvo éxito
                 
                 if success:
+                    # Si se logró derivar toda la cadena, se actualiza la derivación final
                     derivation.clear()
                     derivation.extend(derivation_copy)
                     return remainder
                 else:
-                    # Restore original tree structure on failure
+                    # Si falló la producción, restaura el árbol
                     tree_node["children"] = original_children
             
-            return None
+            return None  # No se encontró derivación válida
         else:
-            # Terminal symbol
+            # Caso base: símbolo terminal
             if s.startswith(symbol):
-                # For terminal symbols, no children
+                # Marca el nodo como terminal
                 tree_node["symbol"] = symbol
                 tree_node["terminal"] = True
-                return s[len(symbol):]
+                return s[len(symbol):]  # Resta el símbolo de la cadena
             else:
-                return None
+                return None  # No hay coincidencia
