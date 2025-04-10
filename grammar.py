@@ -27,7 +27,7 @@ class Grammar:
     def from_text(text: str):
         """
         Método estático que construye una instancia de Grammar a partir de un texto plano.
-        El texto debe tener un formato específico con secciones tipo YAML:
+        El texto debe tener un formato específico con secciones tipo grm:
 
         Ejemplo:
             type: 2
