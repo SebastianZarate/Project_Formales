@@ -1,0 +1,8 @@
+type: 2
+NonTerminals: A, B, C
+Terminals: a, b, c
+start: C
+Productions:
+C -> B A B | A B A
+A -> A B | A a | ab
+B -> B A | b

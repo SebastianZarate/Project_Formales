@@ -138,22 +138,27 @@ class GrammarValidator:
 
         while remaining:
             char = remaining[0]  # Primer carácter a procesar
-            found = False  # Bandera para saber si se encontró una producción válida
-            for production in self.grammar.productions.get(current, []):
-                if len(production) >= 1 and production[0] == char:
-                    next_state = production[1] if len(production) > 1 else None
-                    found = True
-                    path.append(f"{char} -> {next_state if next_state else 'FINAL'}")
-                    current = next_state
-                    remaining = remaining[1:]  # Avanza un carácter
-                    break
-            if not found:
-                return False, path  # No hay transición válida
+            # Filtrar producciones cuyo primer símbolo coincida con el carácter actual
+            valid_options = [prod for prod in self.grammar.productions.get(current, []) if prod and prod[0] == char]
+            
+            if not valid_options:
+                return False, path  # No hay transición válida para el carácter actual
+            
+            # Si estamos en la última letra de la cadena, priorizamos producciones terminales (con longitud 1)
+            if len(remaining) == 1:
+                production = next((prod for prod in valid_options if len(prod) == 1), valid_options[0])
+            else:
+                production = valid_options[0]  # En otros casos, tomamos la primera opción encontrada
+            
+            next_state = production[1] if len(production) > 1 else None
+            path.append(f"{char} -> {next_state if next_state else 'FINAL'}")
+            current = next_state
+            remaining = remaining[1:]  # Avanza un carácter
 
         if current is None:
-            return True, path  # Llegó al final de manera válida
+            return True, path  # La cadena se derivó por completo correctamente
         else:
-            # Si quedan transiciones ε permitidas desde el estado final
+            # Se permite una transición ε si está definida
             for prod in self.grammar.productions.get(current, []):
                 if prod == []:
                     path.append("ε")
