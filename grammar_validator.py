@@ -98,10 +98,19 @@ class GrammarValidator:
     def _validate_regular(self, string):
         """
         Simula la validación de una gramática regular como si fuera un autómata.
+        Versión corregida para manejar correctamente los estados finales.
         """
         current = self.grammar.start
         path = [current]
         remaining = string
+
+        # Si la cadena está vacía, verificamos si el símbolo inicial acepta producción vacía
+        if not string:
+            for prod in self.grammar.productions.get(current, []):
+                if not prod:  # producción vacía (epsilon)
+                    path.append("ε")
+                    return True, path
+            return False, path
 
         while remaining:
             char = remaining[0]
@@ -110,25 +119,43 @@ class GrammarValidator:
             if not valid_options:
                 return False, path
 
-            # Escoge la mejor opción dependiendo de si es el último carácter
-            if len(remaining) == 1:
-                production = next((prod for prod in valid_options if len(prod) == 1), valid_options[0])
-            else:
-                production = valid_options[0]
-
+            # Escoge la primera opción válida
+            production = valid_options[0]
+            
+            # Registra la transición en el camino
             next_state = production[1] if len(production) > 1 else None
             path.append(f"{char} -> {next_state if next_state else 'FINAL'}")
+            
+            # Actualiza el estado actual y la cadena restante
             current = next_state
             remaining = remaining[1:]
 
-        # Revisa si hay producción vacía desde el estado actual
+        # Cuando se ha consumido toda la cadena, verificamos si estamos en un estado final
+        # Un estado es final si:
+        # 1. No hay más estados (current es None), o
+        # 2. El estado actual tiene una producción vacía (epsilon), o
+        # 3. El estado actual tiene producciones que terminan sin pasar a otro estado
+        
         if current is None:
+            # Si terminamos sin un estado actual, es válido
             return True, path
         else:
-            for prod in self.grammar.productions.get(current, []):
-                if prod == []:
+            # Si hay un estado actual, verificamos si es un estado final
+            productions = self.grammar.productions.get(current, [])
+            
+            # Caso 1: El estado tiene una producción vacía (epsilon)
+            for prod in productions:
+                if not prod:  # producción vacía
                     path.append("ε")
                     return True, path
+            
+            # Caso 2: El estado tiene producciones que terminan (producciones de un solo símbolo terminal)
+            for prod in productions:
+                if len(prod) == 1 and prod[0] in self.grammar.terminals:
+                    # No consumimos este símbolo pero confirmamos que el estado es final
+                    return True, path
+            
+            # Si llegamos aquí, no es un estado final válido
             return False, path
 
     def _create_regular_tree(self, transitions, string):
@@ -150,7 +177,7 @@ class GrammarValidator:
 
             parts = step.split(" -> ")
             terminal = parts[0]
-            next_state = parts[1] if len(parts) > 1 else "FINAL"
+            next_state = parts[1] if len(parts) > 1 and parts[1] != "FINAL" else "FINAL"
 
             terminal_node = {
                 "symbol": terminal,
