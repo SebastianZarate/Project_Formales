@@ -98,7 +98,7 @@ class GrammarValidator:
     def _validate_regular(self, string):
         """
         Simula la validación de una gramática regular como si fuera un autómata.
-        Versión corregida para manejar correctamente los estados finales.
+        Versión corregida para manejar correctamente gramáticas regulares.
         """
         current = self.grammar.start
         path = [current]
@@ -112,61 +112,65 @@ class GrammarValidator:
                     return True, path
             return False, path
 
-        while remaining:
+        # Iniciamos la simulación
+        while remaining and current is not None:
             char = remaining[0]
-            valid_options = [prod for prod in self.grammar.productions.get(current, []) if prod and prod[0] == char]
-
-            if not valid_options:
+            valid_transitions = []
+            
+            # Buscamos todas las transiciones posibles para el estado actual y el siguiente símbolo
+            for prod in self.grammar.productions.get(current, []):
+                if prod and prod[0] == char:
+                    next_state = prod[1] if len(prod) > 1 else None
+                    valid_transitions.append((prod[0], next_state))
+            
+            # Si no hay transiciones válidas, la cadena no es aceptada
+            if not valid_transitions:
                 return False, path
-
-            # Escoge la primera opción válida
-            production = valid_options[0]
             
-            # Registra la transición en el camino
-            next_state = production[1] if len(production) > 1 else None
-            path.append(f"{char} -> {next_state if next_state else 'FINAL'}")
+            # Tomamos la primera transición (se podría implementar backtracking para todas)
+            terminal, next_state = valid_transitions[0]
             
-            # Actualiza el estado actual y la cadena restante
+            # Registramos la transición
+            transition_info = f"{terminal} -> {next_state}" if next_state else f"{terminal} -> FINAL"
+            path.append(transition_info)
+            
+            # Avanzamos al siguiente estado y consumimos el símbolo
             current = next_state
             remaining = remaining[1:]
-
-        # Cuando se ha consumido toda la cadena, verificamos si estamos en un estado final
-        # Un estado es final si:
-        # 1. No hay más estados (current es None), o
-        # 2. El estado actual tiene una producción vacía (epsilon), o
-        # 3. El estado actual tiene producciones que terminan sin pasar a otro estado
         
-        if current is None:
-            # Si terminamos sin un estado actual, es válido
-            return True, path
-        else:
-            # Si hay un estado actual, verificamos si es un estado final
-            productions = self.grammar.productions.get(current, [])
+        # Una vez procesada toda la cadena, verificamos si estamos en un estado final
+        if not remaining:
+            # Si no hay más símbolos por consumir, hemos aceptado la cadena si:
+            # 1. No hay estado actual (transición a FINAL), o
+            # 2. El estado actual acepta la cadena vacía
+            if current is None:
+                return True, path
             
-            # Caso 1: El estado tiene una producción vacía (epsilon)
-            for prod in productions:
-                if not prod:  # producción vacía
+            # Verificamos si el estado actual tiene una producción vacía o terminal
+            for prod in self.grammar.productions.get(current, []):
+                if not prod or (len(prod) == 1 and prod[0] in self.grammar.terminals):
                     path.append("ε")
                     return True, path
-            
-            # Caso 2: El estado tiene producciones que terminan (producciones de un solo símbolo terminal)
-            for prod in productions:
-                if len(prod) == 1 and prod[0] in self.grammar.terminals:
-                    # No consumimos este símbolo pero confirmamos que el estado es final
-                    return True, path
-            
-            # Si llegamos aquí, no es un estado final válido
-            return False, path
+        
+        # Si llegamos aquí, la cadena no es aceptada
+        return False, path
 
     def _create_regular_tree(self, transitions, string):
         """
         Construye un árbol de derivación para una gramática regular a partir de las transiciones.
+        Versión corregida para crear un árbol más claro y completo.
         """
+        if not transitions or len(transitions) <= 1:
+            return None
+        
+        # Creamos el nodo raíz con el símbolo inicial
         tree = {"symbol": self.grammar.start, "children": [], "description": "Símbolo inicial"}
         current_node = tree
-
+        
+        # Procesamos todas las transiciones para construir el árbol
         for i, step in enumerate(transitions[1:]):
             if "ε" in step:
+                # Caso de producción vacía
                 current_node["children"].append({
                     "symbol": "ε",
                     "children": [],
@@ -174,29 +178,35 @@ class GrammarValidator:
                     "description": "Producción vacía"
                 })
                 continue
-
+            
+            # Extraemos la información de la transición
             parts = step.split(" -> ")
-            terminal = parts[0]
-            next_state = parts[1] if len(parts) > 1 and parts[1] != "FINAL" else "FINAL"
-
+            terminal = parts[0].strip()
+            next_state = parts[1].strip() if len(parts) > 1 and parts[1] != "FINAL" else None
+            
+            # Creamos un nodo para el terminal
             terminal_node = {
                 "symbol": terminal,
                 "children": [],
                 "terminal": True,
-                "description": f"Terminal en posición {i}"
+                "description": f"Terminal '{terminal}'"
             }
-
+            
+            # Añadimos el nodo terminal como hijo del nodo actual
             current_node["children"].append(terminal_node)
-
-            if next_state != "FINAL":
+            
+            # Si hay un estado siguiente, creamos un nodo para él
+            if next_state:
                 next_node = {
                     "symbol": next_state,
                     "children": [],
-                    "description": f"No terminal después de consumir '{terminal}'"
+                    "description": f"No terminal '{next_state}'"
                 }
+                # El nuevo estado es hijo del terminal
                 terminal_node["children"].append(next_node)
+                # Actualizamos el nodo actual para seguir construyendo desde ahí
                 current_node = next_node
-
+        
         return tree
 
     def _parse_cfg(self, symbol, s, derivation, tree_node, recursion_depth=0, visited=None):

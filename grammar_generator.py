@@ -29,28 +29,73 @@ class GrammarGenerator:
     def _generate_regular(self, length):
         """
         Genera una cadena de una gramática regular que tenga la longitud exacta indicada.
-        Intenta generar la cadena hasta un máximo de 1000 intentos.
+        Versión corregida para generar cadenas válidas y consistentes con el validador.
         """
         max_attempts = 1000
         for _ in range(max_attempts):
             current = self.grammar.start  # Símbolo inicial
             generated = ""  # Cadena generada
-            while True:
-                productions = self.grammar.productions.get(current, [])  # Producciones del símbolo actual
+            transitions = []  # Registrar transiciones para debugging
+            
+            # Intentamos generar una cadena de la longitud deseada
+            while len(generated) < length and current is not None:
+                productions = self.grammar.productions.get(current, [])
+                
                 if not productions:
-                    break  # No hay más producciones posibles
-                production = self.rng.choice(productions)  # Selecciona una producción al azar
-                if production == []:
-                    break  # Producción vacía (ε), termina aquí
-                generated += production[0]  # Agrega el símbolo terminal a la cadena
-                if len(production) > 1:
-                    current = production[1]  # Cambia al siguiente símbolo no terminal
-                else:
-                    current = None  # No hay más símbolos que procesar
+                    # No hay producciones para este símbolo no terminal
                     break
+                
+                valid_productions = []
+                for prod in productions:
+                    # Filtramos producciones para evitar generar cadenas demasiado largas
+                    if not prod:  # Es epsilon
+                        if len(generated) == length:
+                            valid_productions.append(prod)
+                    else:
+                        # Para producciones no vacías, verificamos que no excedamos la longitud
+                        remaining_length = length - len(generated)
+                        if remaining_length >= 1:  # Necesitamos al menos 1 espacio para el terminal
+                            valid_productions.append(prod)
+                
+                if not valid_productions:
+                    # No hay producciones válidas para la longitud deseada
+                    break
+                
+                # Elegimos una producción aleatoria de las válidas
+                production = self.rng.choice(valid_productions)
+                
+                # Aplicamos la producción
+                if production:  # No es epsilon
+                    generated += production[0]  # Añadimos el terminal
+                    transitions.append(f"{current} -> {production[0]}" + 
+                                      (f" {production[1]}" if len(production) > 1 else ""))
+                    
+                    # Actualizamos el símbolo no terminal actual
+                    current = production[1] if len(production) > 1 else None
+                else:  # Es epsilon
+                    transitions.append(f"{current} -> ε")
+                    break
+            
+            # Verificamos si la cadena generada tiene la longitud exacta
             if len(generated) == length:
-                return generated  # Retorna si la longitud es la deseada
-        return None  # Si no se pudo generar en los intentos permitidos
+                # Si terminamos sin un estado actual o si el estado actual puede aceptar
+                # la cadena vacía, entonces la cadena generada es válida
+                if current is None:
+                    return generated
+                
+                # Verificamos si el estado actual tiene una producción vacía
+                if current and any(not prod for prod in self.grammar.productions.get(current, [])):
+                    return generated
+                
+                # Verificamos si el estado actual tiene producciones que solo consumen un terminal
+                # (sin pasar a otro estado)
+                if current:
+                    for prod in self.grammar.productions.get(current, []):
+                        if len(prod) == 1 and prod[0] in self.grammar.terminals:
+                            return generated
+            
+        # Si no pudimos generar una cadena válida después de muchos intentos
+        return None
 
     def _generate_cfg(self, length):
         """
@@ -71,10 +116,21 @@ class GrammarGenerator:
         """
         if symbol in self.grammar.productions:
             productions = self.grammar.productions[symbol]  # Producciones disponibles para el símbolo
+            if not productions:
+                return ""  # Producción vacía (epsilon)
+                
             production = self.rng.choice(productions)  # Selecciona una producción al azar
+            
+            if not production:  # Es epsilon
+                return ""
+                
             result = ""
             for sym in production:
-                result += self._random_expand(sym)  # Expande recursivamente cada símbolo de la producción
+                expanded = self._random_expand(sym)  # Expande recursivamente cada símbolo de la producción
+                if expanded is not None:
+                    result += expanded
+                else:
+                    return None  # Si algún símbolo no se puede expandir, retorna None
             return result
         else:
             return symbol  # Si no hay producción, es un terminal

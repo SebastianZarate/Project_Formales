@@ -1,39 +1,20 @@
 import graphviz
 import tempfile
 import os
-from tkinter import messagebox, Scrollbar, Canvas, Frame
+from tkinter import messagebox
 from PIL import Image, ImageTk
 
 class TreeVisualizer:
     """
     Clase para visualizar árboles de derivación usando Graphviz.
     """
-    def __init__(self, canvas_frame):
+    def __init__(self, canvas):
         """
-        Inicializa el visualizador con el frame donde se mostrará el árbol con barras de desplazamiento.
+        Inicializa el visualizador con el canvas donde se mostrará el árbol.
         
-        :param canvas_frame: Frame de Tkinter donde se colocará el canvas con barras de desplazamiento.
+        :param canvas: Canvas de Tkinter donde se mostrará el árbol.
         """
-        self.canvas_frame = canvas_frame
-        
-        # Crear canvas y barras de desplazamiento
-        self.canvas = Canvas(canvas_frame, bg='white')
-        self.h_scrollbar = Scrollbar(canvas_frame, orient='horizontal', command=self.canvas.xview)
-        self.v_scrollbar = Scrollbar(canvas_frame, orient='vertical', command=self.canvas.yview)
-        
-        # Configurar el canvas para usar las barras de desplazamiento
-        self.canvas.config(xscrollcommand=self.h_scrollbar.set, yscrollcommand=self.v_scrollbar.set)
-        
-        # Colocar los elementos en el frame usando grid para un mejor control del layout
-        self.canvas.grid(row=0, column=0, sticky='nsew')
-        self.h_scrollbar.grid(row=1, column=0, sticky='ew')
-        self.v_scrollbar.grid(row=0, column=1, sticky='ns')
-        
-        # Configurar el frame para que se expanda con la ventana
-        canvas_frame.grid_rowconfigure(0, weight=1)
-        canvas_frame.grid_columnconfigure(0, weight=1)
-        
-        # Variables para almacenar referencias a objetos
+        self.canvas = canvas
         self.graph = None
         self.image = None
         self.image_tk = None
@@ -58,19 +39,28 @@ class TreeVisualizer:
     def create_tree(self, tree_data, grammar):
         """
         Crea un árbol de derivación usando Graphviz.
+        Versión mejorada para manejar mejor las gramáticas tipo 3.
         
         :param tree_data: Diccionario con la estructura del árbol.
         :param grammar: Instancia de Grammar para distinguir terminales y no terminales.
         :return: True si el árbol se creó correctamente, False en caso contrario.
         """
-        try:            
-            # Crear un nuevo grafo dirigido
-            os.environ["PATH"] = r'C:\Program Files\Graphviz\bin' + os.pathsep + os.environ["PATH"]
-        
+        try:
+            # Verificar si Graphviz está instalado
+            try:
+                os.environ["PATH"] = r'C:\Program Files\Graphviz\bin' + os.pathsep + os.environ["PATH"]
+            except Exception:
+                # Ignorar errores si la ruta no existe
+                pass
+            
             # Crear un nuevo grafo dirigido
             self.graph = graphviz.Digraph(format='png', engine='dot')
-            self.graph.attr(rankdir='LR', splines='ortho', nodesep='0.3', 
-                        ranksep='0.5', fontname='Arial')
+            
+            # Configurar atributos del grafo según el tipo de gramática
+            if grammar.type == 3:  # Gramática regular
+                self.graph.attr(rankdir='LR', nodesep='0.3', ranksep='0.5', fontname='Arial')
+            else:  # Gramática tipo 2 (CFG)
+                self.graph.attr(rankdir='TB', nodesep='0.3', ranksep='0.5', fontname='Arial')
             
             # Generar el árbol recursivamente
             self._add_node(tree_data, None, grammar)
@@ -99,6 +89,7 @@ class TreeVisualizer:
     def _add_node(self, node_data, parent_id, grammar, node_counter=[0]):
         """
         Añade un nodo al grafo de forma recursiva.
+        Versión mejorada para manejar mejor los nodos terminales y no terminales.
         
         :param node_data: Diccionario con datos del nodo.
         :param parent_id: ID del nodo padre.
@@ -110,21 +101,25 @@ class TreeVisualizer:
         node_id = f"node_{node_counter[0]}"
         node_counter[0] += 1
         
-        # Determinar si es un terminal o no terminal
+        # Extraer información del nodo
         symbol = node_data["symbol"]
-        is_terminal = node_data.get("terminal", False) or (
-            symbol not in grammar.productions and 
-            symbol not in [None, "ε"]
-        )
+        is_terminal = node_data.get("terminal", False)
         
-        # Establecer atributos según el tipo de nodo
-        if is_terminal:
-            self.graph.node(node_id, label=symbol, shape='box', 
-                         style='filled', fillcolor='#f0a500', fontcolor='white')
-        elif symbol == "ε":
+        # Si no está explícitamente marcado como terminal, verificamos si es un terminal
+        if not is_terminal and symbol not in grammar.nonterminals and symbol not in [None, "ε"]:
+            is_terminal = True
+        
+        # Establecer atributos del nodo según su tipo
+        if symbol == "ε":
+            # Nodo épsilon
             self.graph.node(node_id, label="ε", shape='box', 
                          style='filled', fillcolor='#90ee90', fontcolor='black')
+        elif is_terminal:
+            # Nodo terminal
+            self.graph.node(node_id, label=symbol, shape='box', 
+                         style='filled', fillcolor='#f0a500', fontcolor='white')
         else:
+            # Nodo no terminal
             self.graph.node(node_id, label=symbol, shape='ellipse', 
                          style='filled', fillcolor='#4a6ea9', fontcolor='white')
         
@@ -141,7 +136,7 @@ class TreeVisualizer:
     
     def display_image(self, img_path):
         """
-        Muestra la imagen del árbol en el canvas con un tamaño 3 veces mayor
+        Muestra la imagen del árbol en el canvas con un tamaño apropiado
         y configurado para permitir scroll.
         
         :param img_path: Ruta al archivo de imagen.
@@ -152,12 +147,9 @@ class TreeVisualizer:
         # Cargar la imagen
         pil_image = Image.open(img_path)
         
-        # Calcular dimensiones 3 veces más grandes que las originales
-        new_width = pil_image.width * 1
-        new_height = pil_image.height * 1
-        
-        # Redimensionar la imagen al tamaño aumentado
-        pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
+        # Mantener el tamaño original para mejor claridad
+        new_width = pil_image.width
+        new_height = pil_image.height
         
         # Convertir a formato compatible con Tkinter
         self.image_tk = ImageTk.PhotoImage(pil_image)
